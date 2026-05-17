@@ -91,11 +91,16 @@ jobs:
           </html>
           EOF
 
-      # 8. Checkout or create deploy branch (FIXED!)
+      # 8. Checkout or create deploy branch (with stash fix)
       - name: Checkout deploy branch
         run: |
+          # Stash any local changes
+          git stash --include-untracked
+
+          # Fetch deploy branch
           git fetch origin "${DEPLOY_BRANCH}" || echo "Deploy branch does not exist yet"
 
+          # Checkout deploy branch if exists, otherwise create orphan
           if git rev-parse --verify origin/${DEPLOY_BRANCH}; then
             git checkout ${DEPLOY_BRANCH}
           else
