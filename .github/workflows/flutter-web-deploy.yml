@@ -17,7 +17,8 @@ env:
   DEPLOY_BRANCH: deploy # branch to push built web
   OUTPUT_DIR: web-build # temporary build dir
   DOCS_DIR: docs # final deployment folder for GitHub Pages
-  BASE_HREF: / # adjust if serving from a subpath
+  REPO_NAME: flutter_web_github_pages_deploy # <-- your repo name
+  BASE_HREF: /${{ env.REPO_NAME }}/ # GitHub Pages base path
 
 jobs:
   build-and-deploy:
@@ -42,8 +43,8 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      # 4. Bump build number (like your original workflow)
-      - name: Bump build number for CI
+      # 4. Bump build number for CI
+      - name: Bump build number
         id: version
         run: |
           current_version="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
@@ -53,7 +54,7 @@ jobs:
           echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
           echo "Using version: ${new_version}"
 
-      # 5. Build Flutter web
+      # 5. Build Flutter web with correct base href
       - name: Build Flutter Web (release)
         run: |
           flutter build web \
@@ -64,7 +65,7 @@ jobs:
           mkdir -p "${OUTPUT_DIR}"
           rsync -a --delete build/web/ "${OUTPUT_DIR}/"
 
-      # 6. Prepare 404 redirect for SPA
+      # 6. Setup SPA 404 redirect
       - name: Setup 404.html for SPA
         run: |
           cat > "${OUTPUT_DIR}/404.html" <<EOF
@@ -75,8 +76,11 @@ jobs:
             <title>Flutter Web</title>
             <script>
               (function () {
-                sessionStorage.redirect = location.href;
-                location.replace("${BASE_HREF}");
+                var redirect = sessionStorage.redirect;
+                delete sessionStorage.redirect;
+                if (redirect && redirect !== location.href) {
+                  history.replaceState(null, "", redirect);
+                }
               })();
             </script>
           </head>
@@ -102,7 +106,7 @@ jobs:
           mkdir -p "${DOCS_DIR}"
           rsync -a --delete "${OUTPUT_DIR}/" "${DOCS_DIR}/"
 
-      # 9. Commit and push
+      # 9. Commit and push deploy branch
       - name: Commit and push deploy branch
         run: |
           git config user.name "GitHub Actions"
