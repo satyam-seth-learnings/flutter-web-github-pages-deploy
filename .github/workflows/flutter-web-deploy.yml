@@ -17,8 +17,7 @@ env:
   DEPLOY_BRANCH: deploy # branch to push built web
   OUTPUT_DIR: web-build # temporary build dir
   DOCS_DIR: docs # final deployment folder for GitHub Pages
-  REPO_NAME: flutter_web_github_pages_deploy # <-- your repo name
-  BASE_HREF: /${{ env.REPO_NAME }}/ # GitHub Pages base path
+  REPO_NAME: flutter_web_github_pages_deploy # your repo name
 
 jobs:
   build-and-deploy:
@@ -31,7 +30,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. Setup Flutter (3.41.9 includes Dart 3.11.5)
+      # 2. Set BASE_HREF dynamically
+      - name: Set BASE_HREF
+        run: echo "BASE_HREF=/${{ env.REPO_NAME }}/" >> $GITHUB_ENV
+
+      # 3. Setup Flutter (3.41.9 includes Dart 3.11.5)
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -39,11 +42,11 @@ jobs:
           flutter-version: 3.41.9
           cache: true
 
-      # 3. Install dependencies
+      # 4. Install dependencies
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      # 4. Bump build number for CI
+      # 5. Bump build number for CI
       - name: Bump build number
         id: version
         run: |
@@ -54,7 +57,7 @@ jobs:
           echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
           echo "Using version: ${new_version}"
 
-      # 5. Build Flutter web with correct base href
+      # 6. Build Flutter web with dynamic BASE_HREF
       - name: Build Flutter Web (release)
         run: |
           flutter build web \
@@ -65,7 +68,7 @@ jobs:
           mkdir -p "${OUTPUT_DIR}"
           rsync -a --delete build/web/ "${OUTPUT_DIR}/"
 
-      # 6. Setup SPA 404 redirect
+      # 7. Setup 404.html for SPA
       - name: Setup 404.html for SPA
         run: |
           cat > "${OUTPUT_DIR}/404.html" <<EOF
@@ -88,7 +91,7 @@ jobs:
           </html>
           EOF
 
-      # 7. Checkout or create deploy branch
+      # 8. Checkout or create deploy branch
       - name: Checkout deploy branch
         run: |
           git fetch origin "${DEPLOY_BRANCH}" || echo "Deploy branch does not exist yet"
@@ -97,16 +100,15 @@ jobs:
           else
             git checkout --orphan ${DEPLOY_BRANCH}
             git reset --hard
-          fi
 
-      # 8. Sync build to docs/
+      # 9. Sync web build to docs/
       - name: Sync web build to docs/
         run: |
           rm -rf "${DOCS_DIR}"
           mkdir -p "${DOCS_DIR}"
           rsync -a --delete "${OUTPUT_DIR}/" "${DOCS_DIR}/"
 
-      # 9. Commit and push deploy branch
+      # 10. Commit and push deploy branch
       - name: Commit and push deploy branch
         run: |
           git config user.name "GitHub Actions"
