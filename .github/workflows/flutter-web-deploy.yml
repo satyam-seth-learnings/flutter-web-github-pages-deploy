@@ -14,10 +14,10 @@ permissions:
   contents: write
 
 env:
-  DEPLOY_BRANCH: deploy # branch to push built web
-  OUTPUT_DIR: web-build # temporary build dir
-  DOCS_DIR: docs # final deployment folder for GitHub Pages
-  REPO_NAME: flutter_web_github_pages_deploy # your repo name
+  DEPLOY_BRANCH: deploy
+  OUTPUT_DIR: web-build
+  DOCS_DIR: docs
+  REPO_NAME: flutter_web_github_pages_deploy
 
 jobs:
   build-and-deploy:
@@ -91,15 +91,17 @@ jobs:
           </html>
           EOF
 
-      # 8. Checkout or create deploy branch
+      # 8. Checkout or create deploy branch (FIXED!)
       - name: Checkout deploy branch
         run: |
           git fetch origin "${DEPLOY_BRANCH}" || echo "Deploy branch does not exist yet"
+
           if git rev-parse --verify origin/${DEPLOY_BRANCH}; then
             git checkout ${DEPLOY_BRANCH}
           else
             git checkout --orphan ${DEPLOY_BRANCH}
             git reset --hard
+          fi
 
       # 9. Sync web build to docs/
       - name: Sync web build to docs/
