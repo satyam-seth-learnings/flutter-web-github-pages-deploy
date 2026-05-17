@@ -61,18 +61,17 @@ jobs:
       - name: Build Flutter Web (release)
         run: |
           set -e
-          flutter build web \
-            --release \
-            --base-href "${BASE_HREF}" \
-            --build-number "${GITHUB_RUN_NUMBER}"
+
+          echo "Building Flutter web..."
+          flutter build web --release --base-href "${BASE_HREF}" --build-number "${GITHUB_RUN_NUMBER}"
 
           # Ensure OUTPUT_DIR exists
           rm -rf "${OUTPUT_DIR}"
           mkdir -p "${OUTPUT_DIR}"
 
-          # Copy build/web/ to OUTPUT_DIR
+          # Copy build/web/ to OUTPUT_DIR safely
           if [ -d "build/web" ]; then
-            rsync -a --delete build/web/ "${OUTPUT_DIR}/"
+            cp -r build/web/* "${OUTPUT_DIR}/"
           else
             echo "Error: build/web folder does not exist. Flutter build failed."
             exit 1
@@ -104,13 +103,9 @@ jobs:
       # 8. Checkout or create deploy branch safely
       - name: Checkout deploy branch
         run: |
-          # Stash any local changes (pubspec.yaml modified after bump)
           git stash --include-untracked
-
-          # Fetch deploy branch
           git fetch origin "${DEPLOY_BRANCH}" || echo "Deploy branch does not exist yet"
 
-          # Checkout deploy branch if exists, otherwise create orphan
           if git rev-parse --verify origin/${DEPLOY_BRANCH}; then
             git checkout ${DEPLOY_BRANCH}
           else
@@ -125,7 +120,7 @@ jobs:
           mkdir -p "${DOCS_DIR}"
 
           if [ -d "${OUTPUT_DIR}" ]; then
-            rsync -a --delete "${OUTPUT_DIR}/" "${DOCS_DIR}/"
+            cp -r "${OUTPUT_DIR}/"* "${DOCS_DIR}/"
           else
             echo "Error: ${OUTPUT_DIR} does not exist. Cannot sync to docs/"
             exit 1
