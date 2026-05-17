@@ -1,0 +1,81 @@
+name: Build and Deploy Flutter Web to Same Repo
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: web-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  DEPLOY_BRANCH: deploy # branch to push built web
+  OUTPUT_DIR: web-build # temporary build dir
+  DOCS_DIR: docs # final deployment dir for GH Pages
+  BASE_HREF: / # adjust if using a subpath
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Flutter installation
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.2
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        run: |
+          flutter build web --release --base-href "${BASE_HREF}"
+          rm -rf "${OUTPUT_DIR}"
+          mkdir -p "${OUTPUT_DIR}"
+          rsync -a --delete build/web/ "${OUTPUT_DIR}/"
+
+      - name: Checkout or create deploy branch
+        run: |
+          git fetch origin "${DEPLOY_BRANCH}" || echo "No deploy branch yet"
+          if git rev-parse --verify origin/${DEPLOY_BRANCH}; then
+            git checkout ${DEPLOY_BRANCH}
+          else
+            git checkout --orphan ${DEPLOY_BRANCH}
+            git reset --hard
+          fi
+
+      - name: Sync web build to docs/
+        run: |
+          rm -rf "${DOCS_DIR}"
+          mkdir -p "${DOCS_DIR}"
+          rsync -a --delete "${OUTPUT_DIR}/" "${DOCS_DIR}/"
+
+      - name: Commit and push deploy branch
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes to deploy."
+            exit 0
+          fi
+
+          git add "${DOCS_DIR}/"
+          git commit -m "chore(deploy): update Flutter web build (${GITHUB_SHA::7})"
+          git push origin "${DEPLOY_BRANCH}"
