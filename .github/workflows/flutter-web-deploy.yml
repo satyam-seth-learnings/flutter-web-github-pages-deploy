@@ -15,7 +15,6 @@ permissions:
 
 env:
   DEPLOY_BRANCH: deploy
-  OUTPUT_DIR: web-build
   DOCS_DIR: docs
   REPO_NAME: flutter_web_github_pages_deploy
 
@@ -24,17 +23,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout main branch
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Set BASE_HREF dynamically for GitHub Pages
       - name: Set BASE_HREF
         run: echo "BASE_HREF=/${{ env.REPO_NAME }}/" >> $GITHUB_ENV
 
-      # 3. Setup Flutter
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -42,12 +38,10 @@ jobs:
           flutter-version: 3.41.9
           cache: true
 
-      # 4. Install dependencies
-      - name: Install Flutter dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      # 5. Bump build number
-      - name: Bump build number for CI
+      - name: Bump build number
         id: version
         run: |
           current_version="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
@@ -55,32 +49,20 @@ jobs:
           new_version="${version_name}+${GITHUB_RUN_NUMBER}"
           sed -i -E "s/^version:.*/version: ${new_version}/" pubspec.yaml
           echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
-          echo "Using version: ${new_version}"
 
-      # 6. Build Flutter Web
       - name: Build Flutter Web (release)
         run: |
           set -e
-
-          echo "Building Flutter web..."
           flutter build web --release --base-href "${BASE_HREF}" --build-number "${GITHUB_RUN_NUMBER}"
 
-          # Ensure OUTPUT_DIR exists
-          rm -rf "${OUTPUT_DIR}"
-          mkdir -p "${OUTPUT_DIR}"
-
-          # Copy build/web/ to OUTPUT_DIR safely
-          if [ -d "build/web" ]; then
-            cp -r build/web/* "${OUTPUT_DIR}/"
-          else
-            echo "Error: build/web folder does not exist. Flutter build failed."
+          if [ ! -d "build/web" ]; then
+            echo "Error: build/web does not exist. Flutter build failed."
             exit 1
           fi
 
-      # 7. Setup 404.html for SPA
       - name: Setup 404.html for SPA
         run: |
-          cat > "${OUTPUT_DIR}/404.html" <<EOF
+          cat > "build/web/404.html" <<EOF
           <!DOCTYPE html>
           <html>
           <head>
@@ -100,7 +82,6 @@ jobs:
           </html>
           EOF
 
-      # 8. Checkout or create deploy branch safely
       - name: Checkout deploy branch
         run: |
           git stash --include-untracked
@@ -113,20 +94,13 @@ jobs:
             git reset --hard
           fi
 
-      # 9. Sync web build to docs/
-      - name: Sync web build to docs/
+      - name: Sync build/web to docs/
         run: |
           rm -rf "${DOCS_DIR}"
           mkdir -p "${DOCS_DIR}"
 
-          if [ -d "${OUTPUT_DIR}" ]; then
-            cp -r "${OUTPUT_DIR}/"* "${DOCS_DIR}/"
-          else
-            echo "Error: ${OUTPUT_DIR} does not exist. Cannot sync to docs/"
-            exit 1
-          fi
+          cp -r build/web/* "${DOCS_DIR}/"
 
-      # 10. Commit and push deploy branch
       - name: Commit and push deploy branch
         run: |
           git config user.name "GitHub Actions"
