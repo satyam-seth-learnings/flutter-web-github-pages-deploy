@@ -30,11 +30,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. Set BASE_HREF dynamically
+      # 2. Set BASE_HREF dynamically for GitHub Pages
       - name: Set BASE_HREF
         run: echo "BASE_HREF=/${{ env.REPO_NAME }}/" >> $GITHUB_ENV
 
-      # 3. Setup Flutter (3.41.9 includes Dart 3.11.5)
+      # 3. Setup Flutter
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -46,8 +46,8 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      # 5. Bump build number for CI
-      - name: Bump build number
+      # 5. Bump build number
+      - name: Bump build number for CI
         id: version
         run: |
           current_version="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
@@ -57,16 +57,26 @@ jobs:
           echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
           echo "Using version: ${new_version}"
 
-      # 6. Build Flutter web with dynamic BASE_HREF
+      # 6. Build Flutter Web
       - name: Build Flutter Web (release)
         run: |
+          set -e
           flutter build web \
             --release \
             --base-href "${BASE_HREF}" \
             --build-number "${GITHUB_RUN_NUMBER}"
+
+          # Ensure OUTPUT_DIR exists
           rm -rf "${OUTPUT_DIR}"
           mkdir -p "${OUTPUT_DIR}"
-          rsync -a --delete build/web/ "${OUTPUT_DIR}/"
+
+          # Copy build/web/ to OUTPUT_DIR
+          if [ -d "build/web" ]; then
+            rsync -a --delete build/web/ "${OUTPUT_DIR}/"
+          else
+            echo "Error: build/web folder does not exist. Flutter build failed."
+            exit 1
+          fi
 
       # 7. Setup 404.html for SPA
       - name: Setup 404.html for SPA
@@ -91,10 +101,10 @@ jobs:
           </html>
           EOF
 
-      # 8. Checkout or create deploy branch (with stash fix)
+      # 8. Checkout or create deploy branch safely
       - name: Checkout deploy branch
         run: |
-          # Stash any local changes
+          # Stash any local changes (pubspec.yaml modified after bump)
           git stash --include-untracked
 
           # Fetch deploy branch
@@ -113,7 +123,13 @@ jobs:
         run: |
           rm -rf "${DOCS_DIR}"
           mkdir -p "${DOCS_DIR}"
-          rsync -a --delete "${OUTPUT_DIR}/" "${DOCS_DIR}/"
+
+          if [ -d "${OUTPUT_DIR}" ]; then
+            rsync -a --delete "${OUTPUT_DIR}/" "${DOCS_DIR}/"
+          else
+            echo "Error: ${OUTPUT_DIR} does not exist. Cannot sync to docs/"
+            exit 1
+          fi
 
       # 10. Commit and push deploy branch
       - name: Commit and push deploy branch
