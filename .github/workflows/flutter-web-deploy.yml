@@ -16,7 +16,7 @@ permissions:
 env:
   DEPLOY_BRANCH: deploy
   DOCS_DIR: docs
-  REPO_NAME: flutter_web_github_pages_deploy
+  REPO_NAME: flutter-web-github-pages-deploy
 
 jobs:
   build-and-deploy:
